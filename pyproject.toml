@@ -1,5 +1,5 @@
 [project]
-name = "agent"
+name = "mutli-modal-researcher"
 version = "0.0.1"
 description = "Multi-modal researcher with Gemini"
 authors = [

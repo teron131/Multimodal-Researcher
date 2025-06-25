@@ -1,7 +1,6 @@
 from typing_extensions import TypedDict
 from typing import Optional
 
-
 class ResearchStateInput(TypedDict):
     """State for the research and podcast generation workflow"""
     # Input fields
