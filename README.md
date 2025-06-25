@@ -56,6 +56,17 @@ LangGraph will open in your browser.
 
 5. Pass a `topic` and optionally a `video_url`.
 
+Example:
+* `topic`: Give me an overview of the idea that LLMs are like a new kind of operating system.
+* `video_url`: https://youtu.be/LCEmiRjPEtQ?si=raeMN2Roy5pESNG2
+
+<img width="1604" alt="Screenshot 2025-06-24 at 5 13 31 PM" src="https://github.com/user-attachments/assets/6407e802-8932-4cfb-bdf9-5af96050ee1f" />
+
+Result:
+
+[ See the example report](./example/report/karpathy_os.wav)
+[▶️ Play the example podcast](./example/audio/karpathy_os.wav)
+
 ## Architecture
 
 The system implements a LangGraph workflow with the following nodes:
