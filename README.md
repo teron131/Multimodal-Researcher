@@ -64,8 +64,9 @@ Example:
 
 Result:
 
-[ See the example report](./example/report/karpathy_os.wav)
-[▶️ Play the example podcast](./example/audio/karpathy_os.wav)
+[🔍 See the example report](./example/report/karpathy_os.md)
+
+[▶️ Download the example podcast](./example/audio/karpathy_os.wav)
 
 ## Architecture
 
