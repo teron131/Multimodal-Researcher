@@ -20,7 +20,7 @@ This project is a simple research and podcast generation workflow that uses Lang
 
 1. **Clone and navigate to the project**:
 ```bash
-git clone <repository-url>
+git clone https://github.com/langchain-ai/multi-modal-researcher
 cd mutli-modal-researcher
 ```
 
