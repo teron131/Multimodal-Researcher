@@ -7,8 +7,9 @@ from google.genai import types
 from agent.state import ResearchState, ResearchStateInput, ResearchStateOutput
 from agent.utils import display_gemini_response, create_podcast_discussion, create_research_report, genai_client
 from agent.configuration import Configuration
+from langsmith import traceable
 
-
+@traceable(run_type="llm", name="Web Research", project_name="multi-modal-researcher")
 def search_research_node(state: ResearchState, config: RunnableConfig) -> dict:
     """Node that performs web search research on the topic"""
     configuration = Configuration.from_runnable_config(config)
@@ -31,6 +32,7 @@ def search_research_node(state: ResearchState, config: RunnableConfig) -> dict:
     }
 
 
+@traceable(run_type="llm", name="YouTube Video Analysis", project_name="multi-modal-researcher")
 def analyze_video_node(state: ResearchState, config: RunnableConfig) -> dict:
     """Node that analyzes video content if video URL is provided"""
     configuration = Configuration.from_runnable_config(config)
@@ -56,7 +58,7 @@ def analyze_video_node(state: ResearchState, config: RunnableConfig) -> dict:
     
     return {"video_text": video_text}
 
-
+@traceable(run_type="llm", name="Create Report", project_name="multi-modal-researcher")
 def create_report_node(state: ResearchState, config: RunnableConfig) -> dict:
     """Node that creates a comprehensive research report"""
     configuration = Configuration.from_runnable_config(config)
@@ -76,6 +78,7 @@ def create_report_node(state: ResearchState, config: RunnableConfig) -> dict:
     }
 
 
+@traceable(run_type="llm", name="Create Podcast", project_name="multi-modal-researcher")
 def create_podcast_node(state: ResearchState, config: RunnableConfig) -> dict:
     """Node that creates a podcast discussion"""
     configuration = Configuration.from_runnable_config(config)

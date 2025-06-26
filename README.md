@@ -28,7 +28,7 @@ cd mutli-modal-researcher
 ```bash
 cp .env.example .env
 ```
-Edit `.env` and add your Google Gemini API key:
+Edit `.env` and [add your Google Gemini API key](https://ai.google.dev/gemini-api/docs/api-key):
 ```bash
 GEMINI_API_KEY=your_api_key_here
 ```
