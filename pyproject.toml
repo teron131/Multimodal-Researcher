@@ -1,24 +1,18 @@
 [project]
-name = "mutli-modal-researcher"
+name = "multimodal-researcher"
 version = "0.0.1"
-description = "Multi-modal researcher with Gemini"
-authors = [
-    { name = "Lance Martin", email = "lance@langchain.dev" },
-]
-readme = "README.md"
-license = { text = "MIT" }
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.12,<4.0"
 dependencies = [
-    "langgraph>=0.2.6",
-    "langchain>=0.3.19",
-    "langchain-google-genai",
-    "python-dotenv>=1.0.1",
-    "langgraph-sdk>=0.1.57",
-    "langgraph-cli",
-    "langgraph-api",
-    "fastapi",
-    "google-genai",
-    "rich",
+    "fastapi>=0.115.14",
+    "google-genai>=1.24.0",
+    "langchain>=0.3.26",
+    "langchain-google-genai>=2.1.6",
+    "langgraph>=0.5.1",
+    "langgraph-api>=0.2.78",
+    "langgraph-cli>=0.3.3",
+    "langgraph-sdk>=0.1.72",
+    "python-dotenv>=1.1.1",
+    "rich>=14.0.0",
 ]
 
 
