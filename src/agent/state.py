@@ -1,39 +1,33 @@
 from typing import Optional
 
-from typing_extensions import TypedDict
+from pydantic import BaseModel, Field
 
 
-class ResearchStateInput(TypedDict):
-    """State for the research and podcast generation workflow"""
+class ResearchStateInput(BaseModel):
+    """State for the research and report generation workflow input"""
 
-    # Input fields
-    topic: str
-    video_url: Optional[str]
-
-
-class ResearchStateOutput(TypedDict):
-    """State for the research and podcast generation workflow"""
-
-    # Final outputs
-    report: Optional[str]
-    podcast_script: Optional[str]
-    podcast_filename: Optional[str]
+    topic: str = Field(..., min_length=1)
+    video_url: Optional[str] = None
 
 
-class ResearchState(TypedDict):
-    """State for the research and podcast generation workflow"""
+class ResearchStateOutput(BaseModel):
+    """State for the research and report generation workflow output"""
 
-    # Input fields
-    topic: str
-    video_url: Optional[str]
+    report: Optional[str] = None
+
+
+class ResearchState(BaseModel):
+    """State for the research and report generation workflow"""
+
+    # Input fields - optional to allow partial updates
+    topic: Optional[str] = None
+    video_url: Optional[str] = None
 
     # Intermediate results
-    search_text: Optional[str]
-    search_sources_text: Optional[str]
-    video_text: Optional[str]
+    search_text: Optional[str] = None
+    search_sources_text: Optional[str] = None
+    video_text: Optional[str] = None
 
     # Final outputs
-    report: Optional[str]
-    synthesis_text: Optional[str]
-    podcast_script: Optional[str]
-    podcast_filename: Optional[str]
+    report: Optional[str] = None
+    synthesis_text: Optional[str] = None

@@ -1,8 +1,7 @@
 import os
-import wave
 
 from dotenv import load_dotenv
-from google.genai import Client, types
+from google.genai import Client
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -57,97 +56,6 @@ def display_gemini_response(response):
                     console.print(f"• \"{snippet}\" [dim](sources: {', '.join(source_nums)})[/dim]")
 
     return text, sources_text
-
-
-def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
-    """Save PCM data to a wave file"""
-    with wave.open(filename, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(rate)
-        wf.writeframes(pcm)
-
-
-def create_podcast_discussion(topic, search_text, video_text, search_sources_text, video_url, filename="research_podcast.wav", configuration=None):
-    """Create a 2-speaker podcast discussion explaining the research topic"""
-
-    # Use default values if no configuration provided
-    if configuration is None:
-        from agent.configuration import Configuration
-
-        configuration = Configuration()
-
-    # Step 1: Generate podcast script
-    script_prompt = f"""
-    Create a natural, engaging podcast conversation between Dr. Sarah (research expert) and Mike (curious interviewer) about "{topic}".
-    
-    Use this research content:
-    
-    SEARCH FINDINGS:
-    {search_text}
-    
-    VIDEO INSIGHTS:
-    {video_text}
-    
-    Format as a dialogue with:
-    - Mike introducing the topic and asking questions
-    - Dr. Sarah explaining key concepts and insights
-    - Natural back-and-forth discussion (5-7 exchanges)
-    - Mike asking follow-up questions
-    - Dr. Sarah synthesizing the main takeaways
-    - Keep it conversational and accessible (3-4 minutes when spoken)
-    
-    Format exactly like this:
-    Mike: [opening question]
-    Dr. Sarah: [expert response]
-    Mike: [follow-up]
-    Dr. Sarah: [explanation]
-    [continue...]
-    """
-
-    script_response = genai_client.models.generate_content(model=configuration.synthesis_model, contents=script_prompt, config={"temperature": configuration.podcast_script_temperature})
-
-    podcast_script = script_response.candidates[0].content.parts[0].text
-
-    # Step 2: Generate TTS audio
-    tts_prompt = f"TTS the following conversation between Mike and Dr. Sarah:\n{podcast_script}"
-
-    response = genai_client.models.generate_content(
-        model=configuration.tts_model,
-        contents=tts_prompt,
-        config=types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
-                    speaker_voice_configs=[
-                        types.SpeakerVoiceConfig(
-                            speaker="Mike",
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=configuration.mike_voice,
-                                )
-                            ),
-                        ),
-                        types.SpeakerVoiceConfig(
-                            speaker="Dr. Sarah",
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=configuration.sarah_voice,
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
-        ),
-    )
-
-    # Step 3: Save audio file
-    audio_data = response.candidates[0].content.parts[0].inline_data.data
-    wave_file(filename, audio_data, configuration.tts_channels, configuration.tts_rate, configuration.tts_sample_width)
-
-    print(f"Podcast saved as: {filename}")
-    return podcast_script, filename
 
 
 def create_research_report(topic, search_text, video_text, search_sources_text, video_url, configuration=None):
