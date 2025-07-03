@@ -13,8 +13,7 @@ class Configuration(BaseModel):
     # Model settings
     search_model: str = Field(default="gemini-2.5-flash", description="Web search supported model")
     synthesis_model: str = Field(default="gemini-2.5-flash", description="Citations supported model")
-    video_model: str = Field(default="gemini-2.5-flash", description="Citations supported model")
-    tts_model: str = Field(default="gemini-2.5-flash-preview-tts", description="Text-to-speech model")
+    video_model: str = Field(default="gemini-2.5-flash", description="Video analysis supported model")
 
     # Temperature settings for different use cases
     search_temperature: float = Field(default=0.0, ge=0.0, le=2.0, description="Factual search queries")
