@@ -1,4 +1,4 @@
-# Multi-Modal Researcher
+# Multimodal Researcher
 
 This project is a simple research workflow that uses LangGraph with the unique capabilities of Google's Gemini 2.5 model family. It combines three useful features of the Gemini 2.5 model family. You can pass a research topic and, optionally, a YouTube video URL. The system will then perform research on the topic using search, analyze the video, combine the insights, and generate a report with citations. It takes advantage of a few of Gemini's native capabilities:
 
@@ -79,7 +79,7 @@ The system implements a LangGraph workflow with the following nodes:
 ### Workflow
 
 ```
-START → search_research → [analyze_video?] → create_report → END
+START → web_search → [analyze_video?] → create_report → END
 ```
 
 The workflow conditionally includes video analysis if a YouTube URL is provided, otherwise proceeds directly to report generation.
@@ -127,7 +127,7 @@ The system supports runtime configuration through the `Configuration` class:
 ### Utility Functions
 
 - **display_gemini_response()**: Processes Gemini responses with grounding metadata
-- **create_research_report()**: Synthesizes multi-modal research into reports
+- **create_research_report()**: Synthesizes multimodal research into reports
 
 ## Deployment
 
