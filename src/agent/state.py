@@ -1,12 +1,12 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ResearchStateInput(BaseModel):
     """State for the research and report generation workflow input"""
 
-    topic: str = Field(..., min_length=1)
+    topic: Optional[str] = None
     video_url: Optional[str] = None
 
 
