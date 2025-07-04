@@ -11,11 +11,13 @@ class Configuration(BaseModel):
     """LangGraph Configuration for the deep research agent."""
 
     # Model settings
+    plan_model: str = Field(default="gemini-2.5-flash", description="Plan supported model")
     search_model: str = Field(default="gemini-2.5-flash", description="Web search supported model")
     synthesis_model: str = Field(default="gemini-2.5-flash", description="Citations supported model")
     video_model: str = Field(default="gemini-2.5-flash", description="Video analysis supported model")
 
     # Temperature settings for different use cases
+    plan_temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Plan temperature")
     search_temperature: float = Field(default=0.0, ge=0.0, le=2.0, description="Factual search queries")
     synthesis_temperature: float = Field(default=0.3, ge=0.0, le=2.0, description="Balanced synthesis")
 

@@ -1,29 +1,57 @@
 """LangGraph implementation of the research and report generation workflow"""
 
-from google.genai import types
+import os
+
+from dotenv import load_dotenv
+from google.genai import Client, types
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
-from langsmith import traceable
 
 from agent.configuration import Configuration
-from agent.state import ResearchState, ResearchStateInput, ResearchStateOutput
-from agent.utils import display_gemini_response, genai_client
+from agent.state import GraphInput, GraphOutput, GraphState, Plan
+from agent.utils import display_gemini_response
+
+load_dotenv()
 
 
-def web_search_node(state: ResearchState, config: RunnableConfig) -> dict:
+client = Client(api_key=os.getenv("GEMINI_API_KEY"))
+google_search_tool = types.Tool(google_search=types.GoogleSearch())
+
+
+def plan_node(state: GraphState, config: RunnableConfig) -> dict:
+    """Node that plans the research"""
+    configuration = Configuration.from_runnable_config(config)
+
+    plan_response = client.models.generate_content(
+        model=configuration.plan_model,
+        contents=f"Plan the subtopics / questions to research for the topic: {state.topic} as a list of 3-5 sections",
+        config=types.GenerateContentConfig(
+            temperature=configuration.plan_temperature,
+            thinking_config=types.ThinkingConfig(thinking_budget=1024),
+            response_mime_type="application/json",
+            response_schema=Plan,
+        ),
+    )
+
+    plan: Plan = plan_response.parsed
+
+    return {"plan": plan}
+
+
+def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that performs web search research on the topic"""
     configuration = Configuration.from_runnable_config(config)
 
     if not state.topic and not state.video_url:
         raise ValueError("Either topic or video URL is required for search research")
 
-    search_response = genai_client.models.generate_content(
+    search_response = client.models.generate_content(
         model=configuration.search_model,
         contents=f"Research this topic and give me an overview: {state.topic}",
-        config={
-            "tools": [{"google_search": {}}],
-            "temperature": configuration.search_temperature,
-        },
+        config=types.GenerateContentConfig(
+            tools=[google_search_tool],
+            temperature=configuration.search_temperature,
+        ),
     )
 
     search_text, search_sources_text = display_gemini_response(search_response)
@@ -34,14 +62,14 @@ def web_search_node(state: ResearchState, config: RunnableConfig) -> dict:
     }
 
 
-def analyze_video_node(state: ResearchState, config: RunnableConfig) -> dict:
+def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that analyzes video content if video URL is provided"""
     configuration = Configuration.from_runnable_config(config)
 
     if not state.video_url:
         return {"video_text": "No video provided for analysis."}
 
-    video_response = genai_client.models.generate_content(
+    video_response = client.models.generate_content(
         model=configuration.video_model,
         contents=types.Content(
             parts=[
@@ -51,12 +79,12 @@ def analyze_video_node(state: ResearchState, config: RunnableConfig) -> dict:
         ),
     )
 
-    video_text, _ = display_gemini_response(video_response)
+    video_text = video_response.text
 
     return {"video_text": video_text}
 
 
-def create_report_node(state: ResearchState, config: RunnableConfig) -> dict:
+def create_report_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that creates a comprehensive research report"""
     configuration = Configuration.from_runnable_config(config)
 
@@ -82,7 +110,7 @@ def create_report_node(state: ResearchState, config: RunnableConfig) -> dict:
     Focus on creating a coherent narrative that brings together the best insights from both sources.
     """
 
-    synthesis_response = genai_client.models.generate_content(
+    synthesis_response = client.models.generate_content(
         model=configuration.synthesis_model,
         contents=synthesis_prompt,
         config={
@@ -97,7 +125,7 @@ def create_report_node(state: ResearchState, config: RunnableConfig) -> dict:
 
 ## Executive Summary
 
-{state.synthesis_text}
+{synthesis_text}
 
 ## Video Source
 - **URL**: {state.video_url}
@@ -110,12 +138,14 @@ def create_report_node(state: ResearchState, config: RunnableConfig) -> dict:
 """
 
     return {
-        "report": report,
-        "synthesis_text": synthesis_text,
+        "output": {
+            "report": report,
+            "synthesis_text": synthesis_text,
+        },
     }
 
 
-def should_analyze_video(state: ResearchState) -> str:
+def should_analyze_video(state: GraphState) -> str:
     """Conditional edge to determine if video analysis should be performed"""
     if state.video_url:
         return "analyze_video"
@@ -128,19 +158,21 @@ def create_research_graph() -> StateGraph:
 
     # Create the graph with configuration schema
     graph = StateGraph(
-        ResearchState,
-        input=ResearchStateInput,
-        output=ResearchStateOutput,
+        GraphState,
+        input=GraphInput,
+        output=GraphOutput,
         config_schema=Configuration,
     )
 
     # Add nodes
+    graph.add_node("plan", plan_node)
     graph.add_node("web_search", web_search_node)
     graph.add_node("analyze_video", analyze_video_node)
     graph.add_node("create_report", create_report_node)
 
     # Add edges
-    graph.add_edge(START, "web_search")
+    graph.add_edge(START, "plan")
+    graph.add_edge("plan", "web_search")
     graph.add_conditional_edges("web_search", should_analyze_video, {"analyze_video": "analyze_video", "create_report": "create_report"})
     graph.add_edge("analyze_video", "create_report")
     graph.add_edge("create_report", END)

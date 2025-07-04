@@ -1,22 +1,14 @@
-import os
-
-from dotenv import load_dotenv
-from google.genai import Client
+from google.genai import types
 from rich.console import Console
 from rich.markdown import Markdown
 
-load_dotenv()
 
-# Initialize client
-genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-
-def display_gemini_response(response):
+def display_gemini_response(response: types.GenerateContentResponse):
     """Extract text from Gemini response and display as markdown with references"""
     console = Console()
 
     # Extract main content
-    text = response.candidates[0].content.parts[0].text
+    text = response.text
     md = Markdown(text)
     console.print(md)
 
