@@ -27,6 +27,7 @@ class GraphOutput(BaseModel):
 
 
 class Section(BaseModel):
+    index: int = Field(..., description="The index of the section", ge=1, le=5)
     title: str
     description: str
     # subsections: Optional[List[Subsection]] = None
@@ -34,6 +35,17 @@ class Section(BaseModel):
 
 class Plan(BaseModel):
     sections: List[Section]
+
+
+# ===== Search states =====
+class SectionResult(BaseModel):
+    section: Section
+    result: str
+    sources: str
+
+
+class SearchResults(BaseModel):
+    section_results: List[SectionResult]
 
 
 # ===== Graph state =====
@@ -46,8 +58,7 @@ class GraphState(BaseModel):
 
     # Intermediate results
     plan: Optional[Plan] = None
-    search_text: Optional[str] = None
-    search_sources_text: Optional[str] = None
+    search_results: Optional[SearchResults] = None
     video_text: Optional[str] = None
 
     # Output fields - flatten to avoid nested state issues

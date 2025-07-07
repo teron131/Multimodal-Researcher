@@ -1,15 +1,25 @@
 """LangGraph implementation of the research and report generation workflow"""
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 from google.genai import Client, types
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from tqdm import tqdm
 
 from multimodal_researcher.configuration import Configuration
-from multimodal_researcher.state import GraphInput, GraphOutput, GraphState, Plan
-from multimodal_researcher.utils import display_gemini_response
+from multimodal_researcher.state import (
+    GraphInput,
+    GraphOutput,
+    GraphState,
+    Plan,
+    SearchResults,
+    Section,
+    SectionResult,
+)
+from multimodal_researcher.utils import extract_search_response
 
 load_dotenv()
 
@@ -24,10 +34,10 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
 
     plan_response = client.models.generate_content(
         model=configuration.plan_model,
-        contents=f"Plan the subtopics / questions to research for the topic: {state.topic} as a list of 3-5 sections",
+        contents=f"Plan the subtopics / questions to research for the topic: {state.query} as a list of 3-5 sections",
         config=types.GenerateContentConfig(
             temperature=configuration.plan_temperature,
-            thinking_config=types.ThinkingConfig(thinking_budget=1024),
+            thinking_config=types.ThinkingConfig(thinking_budget=2048),
             response_mime_type="application/json",
             response_schema=Plan,
         ),
@@ -38,6 +48,21 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
     return {"plan": plan}
 
 
+def _search_section(section: Section, topic: str, configuration: Configuration) -> SectionResult:
+    """Helper function to search a single section"""
+    search_response = client.models.generate_content(
+        model=configuration.search_model,
+        contents=f"Research about the topic{topic} in {section.title}: draw key points and conclusions about {section.description}",
+        config=types.GenerateContentConfig(
+            tools=[google_search_tool],
+            temperature=configuration.search_temperature,
+        ),
+    )
+
+    search_result, search_sources = extract_search_response(search_response)
+    return SectionResult(section=section, result=search_result, sources=search_sources)
+
+
 def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that performs web search research on the topic"""
     configuration = Configuration.from_runnable_config(config)
@@ -45,21 +70,13 @@ def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
     if not state.topic and not state.video_url:
         raise ValueError("Either topic or video URL is required for search research")
 
-    search_response = client.models.generate_content(
-        model=configuration.search_model,
-        contents=f"Research this topic and give me an overview: {state.topic}",
-        config=types.GenerateContentConfig(
-            tools=[google_search_tool],
-            temperature=configuration.search_temperature,
-        ),
-    )
+    # Use concurrent execution for parallel searches
+    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(state.plan.sections))) as executor:
+        search_tasks = [executor.submit(_search_section, section, state.topic, configuration) for section in state.plan.sections]
 
-    search_text, search_sources_text = display_gemini_response(search_response)
+        search_results = list(tqdm([task.result() for task in search_tasks], total=len(search_tasks), desc="Searching sections"))
 
-    return {
-        "search_text": search_text,
-        "search_sources_text": search_sources_text,
-    }
+        return {"search_results": SearchResults(section_results=search_results)}
 
 
 def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:

@@ -5,8 +5,35 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 
-def display_gemini_response(response: types.GenerateContentResponse):
-    """Extract text from Gemini response and display as markdown with references"""
+def extract_search_response(response: types.GenerateContentResponse):
+    """Extract text from Gemini search response and return text with sources"""
+    # Extract main content
+    text = response.text
+
+    # Get candidate for grounding metadata
+    candidate = response.candidates[0]
+
+    # Build sources text block
+    sources_text = ""
+
+    # Extract grounding metadata if available
+    if hasattr(candidate, "grounding_metadata") and candidate.grounding_metadata:
+        # Extract and collect source URLs
+        if candidate.grounding_metadata.grounding_chunks:
+            sources_list = []
+            for i, chunk in enumerate(candidate.grounding_metadata.grounding_chunks, 1):
+                if hasattr(chunk, "web") and chunk.web:
+                    title = getattr(chunk.web, "title", "No title") or "No title"
+                    uri = getattr(chunk.web, "uri", "No URI") or "No URI"
+                    sources_list.append(f"{i}. {title}\n   {uri}")
+
+            sources_text = "\n".join(sources_list)
+
+    return text, sources_text
+
+
+def display_gemini_search_response(response: types.GenerateContentResponse):
+    """Extract text from Gemini search response and display as markdown with references"""
     console = Console()
 
     # Extract main content
