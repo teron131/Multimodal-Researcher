@@ -7,9 +7,9 @@ from google.genai import Client, types
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
-from agent.configuration import Configuration
-from agent.state import GraphInput, GraphOutput, GraphState, Plan
-from agent.utils import display_gemini_response
+from multimodal_researcher.configuration import Configuration
+from multimodal_researcher.state import GraphInput, GraphOutput, GraphState, Plan
+from multimodal_researcher.utils import display_gemini_response
 
 load_dotenv()
 

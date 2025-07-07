@@ -1,3 +1,5 @@
+"""State for the research and report generation workflow"""
+
 from typing import List, Optional
 
 from pydantic import BaseModel, Field

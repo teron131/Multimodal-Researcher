@@ -22,9 +22,8 @@ dev = ["mypy>=1.11.1", "ruff>=0.6.1"]
 [build-system]
 requires = ["setuptools>=73.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
-
 [tool.ruff]
-lint.select = [
+select = [
     "E",    # pycodestyle
     "F",    # pyflakes
     "I",    # isort
@@ -33,7 +32,7 @@ lint.select = [
     "T201",
     "UP",
 ]
-lint.ignore = [
+ignore = [
     "UP006",
     "UP007",
     # We actually do want to import from typing_extensions
@@ -49,6 +48,7 @@ convention = "google"
 
 [dependency-groups]
 dev = [
+    "ipykernel>=6.29.5",
     "langgraph-cli[inmem]>=0.1.71",
     "pytest>=8.3.5",
 ]

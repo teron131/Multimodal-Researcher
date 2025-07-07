@@ -1,3 +1,5 @@
+"""Utility functions for the research and report generation workflow"""
+
 from google.genai import types
 from rich.console import Console
 from rich.markdown import Markdown
