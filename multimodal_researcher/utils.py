@@ -40,8 +40,9 @@ def create_report_prompt(state: GraphState) -> str:
 It consists of the following sections:
 
 """
-    for section in state.section_results.section_results:
-        report_prompt += f"""SECTION {section.section.index}: {section.section.title}
+    if state.section_results and state.section_results.section_results:
+        for section in state.section_results.section_results:
+            report_prompt += f"""SECTION {section.section.index}: {section.section.title}
 
 DESCRIPTION:
 {section.section.description}
@@ -50,14 +51,17 @@ SUGGESTED ANSWER:
 {section.answer}
 
 """
+    else:
+        report_prompt += "No section research available.\n\n"
 
     report_prompt += f"""{'-'*50}
 There are additional resources from videos (not necessarily relevant):
 
 """
 
-    for video in state.video_results.video_results:
-        report_prompt += f"""VIDEO: {video.video_title}
+    if state.video_results and state.video_results.video_results:
+        for video in state.video_results.video_results:
+            report_prompt += f"""VIDEO: {video.video_title}
 
 DETAILED NOTE:
 {video.detailed_note}
@@ -66,6 +70,8 @@ SUMMARY:
 {video.summary}
 
 """
+    else:
+        report_prompt += "No video analysis available.\n\n"
 
     report_prompt += f"""{'-'*50}
 Please create a comprehensive report that:

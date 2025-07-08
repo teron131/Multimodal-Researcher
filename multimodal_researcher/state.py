@@ -10,7 +10,7 @@ class GraphInput(BaseModel):
     """State for the DISPLAY"""
 
     topic: Optional[str] = None
-    video_url: Optional[str] = None
+    videos: Optional[str] = None
 
 
 class GraphOutput(BaseModel):
@@ -64,7 +64,7 @@ class GraphState(BaseModel):
 
     # Input fields - flatten to avoid nested state issues
     topic: Optional[str] = None
-    video_urls_raw: Optional[str] = None  # Raw input
+    videos: Optional[str] = None  # Raw input
     video_urls: Optional[list[str]] = None
 
     # Intermediate results
@@ -74,4 +74,3 @@ class GraphState(BaseModel):
 
     # Output fields - flatten to avoid nested state issues
     report: Optional[str] = None
-    synthesis_text: Optional[str] = None

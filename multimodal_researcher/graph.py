@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from google.genai import Client, types
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from langgraph.pregel import RetryPolicy
 from pytubefix import YouTube
 from tqdm import tqdm
 
@@ -82,7 +83,7 @@ def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that performs web search research on the topic"""
     configuration = Configuration.from_runnable_config(config)
 
-    if not state.topic and not state.video_urls_raw:
+    if not state.topic and not state.videos:
         raise ValueError("Either topic or video URL is required for search research")
 
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(state.plan.sections))) as executor:
@@ -122,10 +123,10 @@ def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that analyzes video content if video URL is provided"""
     configuration = Configuration.from_runnable_config(config)
 
-    if not state.video_urls_raw:
+    if not state.videos:
         return {"video_text": "No video provided for analysis."}
 
-    video_urls = extract_youtube_video_urls(state.video_urls_raw)
+    video_urls = extract_youtube_video_urls(state.videos)
 
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(video_urls))) as executor:
         video_tasks = [executor.submit(_analyze_video, video_url, configuration) for video_url in video_urls]
@@ -152,12 +153,12 @@ def create_report_node(state: GraphState, config: RunnableConfig) -> dict:
 
     report_text = report_response.text
 
-    return {"output": {"report": report_text}}
+    return {"report": report_text}
 
 
 def should_analyze_video(state: GraphState) -> str:
     """Conditional edge to determine if video analysis should be performed"""
-    if state.video_urls_raw:
+    if state.videos:
         return "analyze_video"
     else:
         return "create_report"
@@ -169,16 +170,16 @@ def create_research_graph() -> StateGraph:
     # Create the graph with configuration schema
     graph = StateGraph(
         GraphState,
-        input=GraphInput,
-        output=GraphOutput,
+        input_schema=GraphInput,
+        output_schema=GraphOutput,
         config_schema=Configuration,
     )
 
     # Add nodes
-    graph.add_node("plan", plan_node)
-    graph.add_node("web_search", web_search_node)
-    graph.add_node("analyze_video", analyze_video_node)
-    graph.add_node("create_report", create_report_node)
+    graph.add_node("plan", plan_node, retry=RetryPolicy(max_attempts=3))
+    graph.add_node("web_search", web_search_node, retry=RetryPolicy(max_attempts=3))
+    graph.add_node("analyze_video", analyze_video_node, retry=RetryPolicy(max_attempts=3))
+    graph.add_node("create_report", create_report_node, retry=RetryPolicy(max_attempts=3))
 
     # Add edges
     graph.add_edge(START, "plan")
@@ -194,3 +195,17 @@ def create_compiled_graph():
     """Create and compile the research graph"""
     graph = create_research_graph()
     return graph.compile()
+
+
+if __name__ == "__main__":
+    topic = input("Enter the topic: ")
+    videos = input("Enter the video URLs: ")
+    graph = create_compiled_graph()
+    graph_state = GraphState(
+        topic=topic,
+        videos=videos,
+    )
+    config = Configuration()
+    # Convert Configuration to dict for langgraph compatibility
+    response = graph.invoke(graph_state, config=config.model_dump())
+    print(response["report"])
