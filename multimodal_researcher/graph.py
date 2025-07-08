@@ -20,6 +20,7 @@ from multimodal_researcher.state import (
     SearchResults,
     Section,
     VideoResult,
+    VideoResults,
 )
 from multimodal_researcher.utils import extract_youtube_video_urls
 
@@ -53,7 +54,7 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
     return {"plan": plan}
 
 
-def _search_section(section: Section, topic: str, configuration: Configuration) -> SearchResult:
+def _web_search(section: Section, topic: str, configuration: Configuration) -> SearchResult:
     """Helper function to search a single section"""
     search_response = client.models.generate_content(
         model=configuration.search_model,
@@ -66,7 +67,7 @@ def _search_section(section: Section, topic: str, configuration: Configuration) 
     )
 
     answer = search_response.text
-
+    # Parse the sources as a list
     sources = []
     for grounding_chunk in search_response.candidates[0].grounding_metadata.grounding_chunks:
         sources.append((grounding_chunk.web.uri, grounding_chunk.web.title))
@@ -82,11 +83,36 @@ def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
         raise ValueError("Either topic or video URL is required for search research")
 
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(state.plan.sections))) as executor:
-        search_tasks = [executor.submit(_search_section, section, state.topic, configuration) for section in state.plan.sections]
-
+        search_tasks = [executor.submit(_web_search, section, state.topic, configuration) for section in state.plan.sections]
         search_results = list(tqdm([task.result() for task in search_tasks], total=len(search_tasks), desc="Searching sections"))
 
     return {"search_results": SearchResults(section_results=search_results)}
+
+
+def _analyze_video(video_url: str, configuration: Configuration) -> VideoResult:
+    """Helper function to analyze a single video"""
+
+    video_response = client.models.generate_content(
+        model=configuration.video_model,
+        contents=types.Content(
+            parts=[
+                types.Part(file_data=types.FileData(file_uri=video_url)),
+                types.Part(text=f"As you watch the video, create a detailed note of the video as if an article, and give a summary."),
+            ]
+        ),
+        config=types.GenerateContentConfig(
+            temperature=configuration.video_temperature,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            response_mime_type="application/json",
+            response_schema=VideoResult,
+        ),
+    )
+
+    video_result: VideoResult = video_response.parsed
+    video_result.video_url = video_url
+    video_result.video_title = YouTube(video_url).title
+
+    return video_result
 
 
 def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
@@ -97,33 +123,11 @@ def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
         return {"video_text": "No video provided for analysis."}
 
     video_urls = extract_youtube_video_urls(state.video_urls_raw)
+    with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(video_urls))) as executor:
+        video_tasks = [executor.submit(_analyze_video, video_url, configuration) for video_url in video_urls]
+        video_results = list(tqdm([task.result() for task in video_tasks], total=len(video_tasks), desc="Analyzing videos"))
 
-    video_results = []
-    for video_url in video_urls:
-        video_response = client.models.generate_content(
-            model=configuration.video_model,
-            contents=types.Content(
-                parts=[
-                    types.Part(file_data=types.FileData(file_uri=video_url)),
-                    types.Part(text=f"As you watch the video, create a detailed note of the video as if an article, and give a summary."),
-                ]
-            ),
-            config=types.GenerateContentConfig(
-                temperature=configuration.video_temperature,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-                response_mime_type="application/json",
-                response_schema=VideoResult,
-            ),
-        )
-        video_result: VideoResult = video_response.parsed
-
-        # Override the video_url and video_title with the actual video information
-        video_result.video_url = video_url
-        video_result.video_title = YouTube(video_url).title
-
-        video_results.append(video_result)
-
-    return {"video_results": video_results}
+    return {"video_results": VideoResults(video_results=video_results)}
 
 
 def create_report_node(state: GraphState, config: RunnableConfig) -> dict:
