@@ -1,6 +1,6 @@
 """State for the research and report generation workflow"""
 
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -34,18 +34,30 @@ class Section(BaseModel):
 
 
 class Plan(BaseModel):
-    sections: List[Section]
+    sections: list[Section]
 
 
 # ===== Search states =====
-class SectionResult(BaseModel):
+class SearchResult(BaseModel):
     section: Section
-    result: str
-    sources: str
+    answer: str
+    sources: list[tuple[str, str]]
 
 
 class SearchResults(BaseModel):
-    section_results: List[SectionResult]
+    section_results: list[SearchResult]
+
+
+# ===== Video states =====
+class VideoResult(BaseModel):
+    video_url: str
+    video_title: str
+    detailed_note: str
+    summary: str
+
+
+class VideoResults(BaseModel):
+    video_results: list[VideoResult]
 
 
 # ===== Graph state =====
@@ -54,12 +66,13 @@ class GraphState(BaseModel):
 
     # Input fields - flatten to avoid nested state issues
     topic: Optional[str] = None
-    video_url: Optional[str] = None
+    video_urls_raw: Optional[str] = None  # Raw input
+    video_urls: Optional[list[str]] = None
 
     # Intermediate results
     plan: Optional[Plan] = None
     search_results: Optional[SearchResults] = None
-    video_text: Optional[str] = None
+    video_results: Optional[VideoResults] = None
 
     # Output fields - flatten to avoid nested state issues
     report: Optional[str] = None

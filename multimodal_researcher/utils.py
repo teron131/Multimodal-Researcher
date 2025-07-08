@@ -1,8 +1,35 @@
 """Utility functions for the research and report generation workflow"""
 
+import re
+
 from google.genai import types
 from rich.console import Console
 from rich.markdown import Markdown
+
+
+def extract_youtube_video_urls(text: str) -> list[str]:
+    """Extract all YouTube video IDs from a string containing multiple URLs."""
+    text = text.strip()
+
+    video_ids = []
+
+    # Pattern for youtu.be/VIDEO_ID
+    youtu_be_pattern = r"youtu\.be/([a-zA-Z0-9_-]+)"
+
+    # Pattern for youtube.com/watch?v=VIDEO_ID
+    youtube_com_pattern = r"youtube\.com/watch\?v=([a-zA-Z0-9_-]+)(?:&|$)"
+
+    # Find all youtu.be matches
+    youtu_be_matches = re.findall(youtu_be_pattern, text)
+    video_ids.extend(youtu_be_matches)
+
+    # Find all youtube.com matches
+    youtube_com_matches = re.findall(youtube_com_pattern, text)
+    video_ids.extend(youtube_com_matches)
+
+    video_urls = [f"https://youtu.be/{video_id}" for video_id in video_ids]
+
+    return video_urls
 
 
 def extract_search_response(response: types.GenerateContentResponse):

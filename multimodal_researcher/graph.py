@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from google.genai import Client, types
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from pytubefix import YouTube
 from tqdm import tqdm
 
 from multimodal_researcher.configuration import Configuration
@@ -15,16 +16,20 @@ from multimodal_researcher.state import (
     GraphOutput,
     GraphState,
     Plan,
+    SearchResult,
     SearchResults,
     Section,
-    SectionResult,
+    VideoResult,
 )
-from multimodal_researcher.utils import extract_search_response
+from multimodal_researcher.utils import extract_youtube_video_urls
 
 load_dotenv()
 
 
-client = Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = Client(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    http_options={"timeout": 600000},  # 10 minutes
+)
 google_search_tool = types.Tool(google_search=types.GoogleSearch())
 
 
@@ -34,7 +39,7 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
 
     plan_response = client.models.generate_content(
         model=configuration.plan_model,
-        contents=f"Plan the subtopics / questions to research for the topic: {state.query} as a list of 3-5 sections",
+        contents=f"Plan the subtopics / questions to research for the topic: {state.topic} as a list of 3-5 sections",
         config=types.GenerateContentConfig(
             temperature=configuration.plan_temperature,
             thinking_config=types.ThinkingConfig(thinking_budget=2048),
@@ -48,7 +53,7 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
     return {"plan": plan}
 
 
-def _search_section(section: Section, topic: str, configuration: Configuration) -> SectionResult:
+def _search_section(section: Section, topic: str, configuration: Configuration) -> SearchResult:
     """Helper function to search a single section"""
     search_response = client.models.generate_content(
         model=configuration.search_model,
@@ -56,49 +61,69 @@ def _search_section(section: Section, topic: str, configuration: Configuration) 
         config=types.GenerateContentConfig(
             tools=[google_search_tool],
             temperature=configuration.search_temperature,
+            thinking_config=types.ThinkingConfig(thinking_budget=-1),
         ),
     )
 
-    search_result, search_sources = extract_search_response(search_response)
-    return SectionResult(section=section, result=search_result, sources=search_sources)
+    answer = search_response.text
+
+    sources = []
+    for grounding_chunk in search_response.candidates[0].grounding_metadata.grounding_chunks:
+        sources.append((grounding_chunk.web.uri, grounding_chunk.web.title))
+
+    return SearchResult(section=section, answer=answer, sources=sources)
 
 
 def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that performs web search research on the topic"""
     configuration = Configuration.from_runnable_config(config)
 
-    if not state.topic and not state.video_url:
+    if not state.topic and not state.video_urls_raw:
         raise ValueError("Either topic or video URL is required for search research")
 
-    # Use concurrent execution for parallel searches
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(state.plan.sections))) as executor:
         search_tasks = [executor.submit(_search_section, section, state.topic, configuration) for section in state.plan.sections]
 
         search_results = list(tqdm([task.result() for task in search_tasks], total=len(search_tasks), desc="Searching sections"))
 
-        return {"search_results": SearchResults(section_results=search_results)}
+    return {"search_results": SearchResults(section_results=search_results)}
 
 
 def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
     """Node that analyzes video content if video URL is provided"""
     configuration = Configuration.from_runnable_config(config)
 
-    if not state.video_url:
+    if not state.video_urls_raw:
         return {"video_text": "No video provided for analysis."}
 
-    video_response = client.models.generate_content(
-        model=configuration.video_model,
-        contents=types.Content(
-            parts=[
-                types.Part(file_data=types.FileData(file_uri=state.video_url)),
-                types.Part(text=f"Based on the video content, give me an overview of this topic: {state.topic}"),
-            ]
-        ),
-    )
+    video_urls = extract_youtube_video_urls(state.video_urls_raw)
 
-    video_text = video_response.text
+    video_results = []
+    for video_url in video_urls:
+        video_response = client.models.generate_content(
+            model=configuration.video_model,
+            contents=types.Content(
+                parts=[
+                    types.Part(file_data=types.FileData(file_uri=video_url)),
+                    types.Part(text=f"As you watch the video, create a detailed note of the video as if an article, and give a summary."),
+                ]
+            ),
+            config=types.GenerateContentConfig(
+                temperature=configuration.video_temperature,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                response_mime_type="application/json",
+                response_schema=VideoResult,
+            ),
+        )
+        video_result: VideoResult = video_response.parsed
 
-    return {"video_text": video_text}
+        # Override the video_url and video_title with the actual video information
+        video_result.video_url = video_url
+        video_result.video_title = YouTube(video_url).title
+
+        video_results.append(video_result)
+
+    return {"video_results": video_results}
 
 
 def create_report_node(state: GraphState, config: RunnableConfig) -> dict:
@@ -109,22 +134,21 @@ def create_report_node(state: GraphState, config: RunnableConfig) -> dict:
         raise ValueError("Topic is required for report creation")
 
     # Step 1: Create synthesis using Gemini
-    synthesis_prompt = f"""
-    You are a research analyst. I have gathered information about "{state.topic}" from two sources:
-    
-    SEARCH RESULTS:
-    {state.search_text}
-    
-    VIDEO CONTENT:
-    {state.video_text}
-    
-    Please create a comprehensive synthesis that:
-    1. Identifies key themes and insights from both sources
-    2. Highlights any complementary or contrasting perspectives
-    3. Provides an overall analysis of the topic based on this multi-modal research
-    4. Keep it concise but thorough (3-4 paragraphs)
-    
-    Focus on creating a coherent narrative that brings together the best insights from both sources.
+    synthesis_prompt = f"""You are a research analyst. I have gathered information about "{state.topic}" from two sources:
+
+SEARCH RESULTS:
+{state.search_text}
+
+VIDEO CONTENT:
+{state.video_text}
+
+Please create a comprehensive synthesis that:
+1. Identifies key themes and insights from both sources
+2. Highlights any complementary or contrasting perspectives
+3. Provides an overall analysis of the topic based on this multi-modal research
+4. Keep it concise but thorough (3-4 paragraphs)
+
+Focus on creating a coherent narrative that brings together the best insights from both sources.
     """
 
     synthesis_response = client.models.generate_content(
