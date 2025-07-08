@@ -123,6 +123,7 @@ def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
         return {"video_text": "No video provided for analysis."}
 
     video_urls = extract_youtube_video_urls(state.video_urls_raw)
+
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(video_urls))) as executor:
         video_tasks = [executor.submit(_analyze_video, video_url, configuration) for video_url in video_urls]
         video_results = list(tqdm([task.result() for task in video_tasks], total=len(video_tasks), desc="Analyzing videos"))
