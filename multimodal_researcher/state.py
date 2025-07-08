@@ -17,7 +17,6 @@ class GraphOutput(BaseModel):
     """State for the DISPLAY"""
 
     report: Optional[str] = None
-    synthesis_text: Optional[str] = None
 
 
 # ===== Plan states =====
@@ -27,10 +26,9 @@ class GraphOutput(BaseModel):
 
 
 class Section(BaseModel):
-    index: int = Field(..., description="The index of the section", ge=1, le=5)
+    index: int = Field(..., description="The index of the section", ge=1, le=10)
     title: str
     description: str
-    # subsections: Optional[List[Subsection]] = None
 
 
 class Plan(BaseModel):
@@ -38,14 +36,14 @@ class Plan(BaseModel):
 
 
 # ===== Search states =====
-class SearchResult(BaseModel):
+class SectionResult(BaseModel):
     section: Section
     answer: str
     sources: list[tuple[str, str]]
 
 
-class SearchResults(BaseModel):
-    section_results: list[SearchResult]
+class SectionResults(BaseModel):
+    section_results: list[SectionResult]
 
 
 # ===== Video states =====
@@ -71,7 +69,7 @@ class GraphState(BaseModel):
 
     # Intermediate results
     plan: Optional[Plan] = None
-    search_results: Optional[SearchResults] = None
+    section_results: Optional[SectionResults] = None
     video_results: Optional[VideoResults] = None
 
     # Output fields - flatten to avoid nested state issues

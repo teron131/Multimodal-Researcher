@@ -6,6 +6,8 @@ from google.genai import types
 from rich.console import Console
 from rich.markdown import Markdown
 
+from multimodal_researcher.state import GraphState
+
 
 def extract_youtube_video_urls(text: str) -> list[str]:
     """Extract all YouTube video IDs from a string containing multiple URLs."""
@@ -30,6 +32,50 @@ def extract_youtube_video_urls(text: str) -> list[str]:
     video_urls = [f"https://youtu.be/{video_id}" for video_id in video_ids]
 
     return video_urls
+
+
+def create_report_prompt(state: GraphState) -> str:
+    report_prompt = f"""Write a report about the topic {state.topic}.
+
+It consists of the following sections:
+
+"""
+    for section in state.section_results.section_results:
+        report_prompt += f"""SECTION {section.section.index}: {section.section.title}
+
+DESCRIPTION:
+{section.section.description}
+
+SUGGESTED ANSWER:
+{section.answer}
+
+"""
+
+    report_prompt += f"""{'-'*50}
+There are additional resources from videos (not necessarily relevant):
+
+"""
+
+    for video in state.video_results.video_results:
+        report_prompt += f"""VIDEO: {video.video_title}
+
+DETAILED NOTE:
+{video.detailed_note}
+
+SUMMARY:
+{video.summary}
+
+"""
+
+    report_prompt += f"""{'-'*50}
+Please create a comprehensive report that:
+1. Identifies key themes and insights from both sources
+2. Highlights any complementary or contrasting perspectives
+3. Provides an overall analysis of the topic based on this multi-modal research
+4. Keep it concise but thorough (3-4 paragraphs)
+Focus on creating a coherent narrative that brings together the best insights from both sources."""
+
+    return report_prompt
 
 
 def extract_search_response(response: types.GenerateContentResponse):

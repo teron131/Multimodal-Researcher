@@ -16,13 +16,13 @@ from multimodal_researcher.state import (
     GraphOutput,
     GraphState,
     Plan,
-    SearchResult,
-    SearchResults,
     Section,
+    SectionResult,
+    SectionResults,
     VideoResult,
     VideoResults,
 )
-from multimodal_researcher.utils import extract_youtube_video_urls
+from multimodal_researcher.utils import create_report_prompt, extract_youtube_video_urls
 
 load_dotenv()
 
@@ -43,18 +43,21 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
         contents=f"Plan the subtopics / questions to research for the topic: {state.topic} as a list of 3-5 sections",
         config=types.GenerateContentConfig(
             temperature=configuration.plan_temperature,
-            thinking_config=types.ThinkingConfig(thinking_budget=2048),
+            thinking_config=types.ThinkingConfig(thinking_budget=24576),
             response_mime_type="application/json",
             response_schema=Plan,
         ),
     )
 
     plan: Plan = plan_response.parsed
+    # Robustify the index
+    for i, section in enumerate(plan.sections):
+        section.index = i + 1
 
     return {"plan": plan}
 
 
-def _web_search(section: Section, topic: str, configuration: Configuration) -> SearchResult:
+def _web_search(section: Section, topic: str, configuration: Configuration) -> SectionResult:
     """Helper function to search a single section"""
     search_response = client.models.generate_content(
         model=configuration.search_model,
@@ -72,7 +75,7 @@ def _web_search(section: Section, topic: str, configuration: Configuration) -> S
     for grounding_chunk in search_response.candidates[0].grounding_metadata.grounding_chunks:
         sources.append((grounding_chunk.web.uri, grounding_chunk.web.title))
 
-    return SearchResult(section=section, answer=answer, sources=sources)
+    return SectionResult(section=section, answer=answer, sources=sources)
 
 
 def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
@@ -86,7 +89,7 @@ def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
         search_tasks = [executor.submit(_web_search, section, state.topic, configuration) for section in state.plan.sections]
         search_results = list(tqdm([task.result() for task in search_tasks], total=len(search_tasks), desc="Searching sections"))
 
-    return {"search_results": SearchResults(section_results=search_results)}
+    return {"section_results": SectionResults(section_results=search_results)}
 
 
 def _analyze_video(video_url: str, configuration: Configuration) -> VideoResult:
@@ -138,62 +141,23 @@ def create_report_node(state: GraphState, config: RunnableConfig) -> dict:
     if not state.topic:
         raise ValueError("Topic is required for report creation")
 
-    # Step 1: Create synthesis using Gemini
-    synthesis_prompt = f"""You are a research analyst. I have gathered information about "{state.topic}" from two sources:
-
-SEARCH RESULTS:
-{state.search_text}
-
-VIDEO CONTENT:
-{state.video_text}
-
-Please create a comprehensive synthesis that:
-1. Identifies key themes and insights from both sources
-2. Highlights any complementary or contrasting perspectives
-3. Provides an overall analysis of the topic based on this multi-modal research
-4. Keep it concise but thorough (3-4 paragraphs)
-
-Focus on creating a coherent narrative that brings together the best insights from both sources.
-    """
-
-    synthesis_response = client.models.generate_content(
+    report_response = client.models.generate_content(
         model=configuration.synthesis_model,
-        contents=synthesis_prompt,
-        config={
-            "temperature": configuration.synthesis_temperature,
-        },
+        contents=create_report_prompt(state),
+        config=types.GenerateContentConfig(
+            temperature=configuration.synthesis_temperature,
+            thinking_config=types.ThinkingConfig(thinking_budget=24576),
+        ),
     )
 
-    synthesis_text = synthesis_response.candidates[0].content.parts[0].text
+    report_text = report_response.text
 
-    # Step 2: Create markdown report
-    report = f"""# Research Report: {state.topic}
-
-## Executive Summary
-
-{synthesis_text}
-
-## Video Source
-- **URL**: {state.video_url}
-
-## Additional Sources
-{state.search_sources_text}
-
----
-*Report generated using multi-modal AI research combining web search and video analysis*
-"""
-
-    return {
-        "output": {
-            "report": report,
-            "synthesis_text": synthesis_text,
-        },
-    }
+    return {"output": {"report": report_text}}
 
 
 def should_analyze_video(state: GraphState) -> str:
     """Conditional edge to determine if video analysis should be performed"""
-    if state.video_url:
+    if state.video_urls_raw:
         return "analyze_video"
     else:
         return "create_report"
