@@ -42,20 +42,12 @@ class SectionResult(BaseModel):
     sources: list[tuple[str, str]]
 
 
-class SectionResults(BaseModel):
-    section_results: list[SectionResult]
-
-
 # ===== Video states =====
 class VideoResult(BaseModel):
     video_url: str
     video_title: str
     detailed_note: str
     summary: str
-
-
-class VideoResults(BaseModel):
-    video_results: list[VideoResult]
 
 
 # ===== Graph state =====
@@ -69,8 +61,8 @@ class GraphState(BaseModel):
 
     # Intermediate results
     plan: Optional[Plan] = None
-    section_results: Optional[SectionResults] = None
-    video_results: Optional[VideoResults] = None
+    section_results: Optional[list[SectionResult]] = None
+    video_results: Optional[list[VideoResult]] = None
 
     # Output fields - flatten to avoid nested state issues
     report: Optional[str] = None

@@ -19,9 +19,7 @@ from multimodal_researcher.state import (
     Plan,
     Section,
     SectionResult,
-    SectionResults,
     VideoResult,
-    VideoResults,
 )
 from multimodal_researcher.utils import create_report_prompt, extract_youtube_video_urls
 
@@ -58,25 +56,29 @@ def plan_node(state: GraphState, config: RunnableConfig) -> dict:
     return {"plan": plan}
 
 
-def _web_search(section: Section, topic: str, configuration: Configuration) -> SectionResult:
+def _web_search(section: Section, topic: str, configuration: Configuration) -> SectionResult | None:
     """Helper function to search a single section"""
-    search_response = client.models.generate_content(
-        model=configuration.search_model,
-        contents=f"Research about the topic{topic} in {section.title}: draw key points and conclusions about {section.description}",
-        config=types.GenerateContentConfig(
-            tools=[google_search_tool],
-            temperature=configuration.search_temperature,
-            thinking_config=types.ThinkingConfig(thinking_budget=-1),
-        ),
-    )
+    try:
+        search_response = client.models.generate_content(
+            model=configuration.search_model,
+            contents=f"Research about the topic{topic} in {section.title}: draw key points and conclusions about {section.description}",
+            config=types.GenerateContentConfig(
+                tools=[google_search_tool],
+                temperature=configuration.search_temperature,
+                thinking_config=types.ThinkingConfig(thinking_budget=-1),
+            ),
+        )
 
-    answer = search_response.text
-    # Parse the sources as a list
-    sources = []
-    for grounding_chunk in search_response.candidates[0].grounding_metadata.grounding_chunks:
-        sources.append((grounding_chunk.web.uri, grounding_chunk.web.title))
+        answer = search_response.text
+        # Parse the sources as a list
+        sources = []
+        for grounding_chunk in search_response.candidates[0].grounding_metadata.grounding_chunks:
+            sources.append((grounding_chunk.web.uri, grounding_chunk.web.title))
 
-    return SectionResult(section=section, answer=answer, sources=sources)
+        return SectionResult(section=section, answer=answer, sources=sources)
+    except Exception as e:
+        print(f"Error searching section '{section.title}': {e}")
+        return None
 
 
 def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
@@ -88,35 +90,38 @@ def web_search_node(state: GraphState, config: RunnableConfig) -> dict:
 
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(state.plan.sections))) as executor:
         search_tasks = [executor.submit(_web_search, section, state.topic, configuration) for section in state.plan.sections]
-        search_results = list(tqdm([task.result() for task in search_tasks], total=len(search_tasks), desc="Searching sections"))
+        search_results: list[SectionResult] = [result for task in tqdm(search_tasks, total=len(search_tasks), desc="Searching sections") if (result := task.result()) is not None]
 
-    return {"section_results": SectionResults(section_results=search_results)}
+    return {"section_results": search_results}
 
 
-def _analyze_video(video_url: str, configuration: Configuration) -> VideoResult:
+def _analyze_video(video_url: str, configuration: Configuration) -> VideoResult | None:
     """Helper function to analyze a single video"""
+    try:
+        video_response = client.models.generate_content(
+            model=configuration.video_model,
+            contents=types.Content(
+                parts=[
+                    types.Part(file_data=types.FileData(file_uri=video_url)),
+                    types.Part(text=f"As you watch the video, create a detailed note of the video as if an article, and give a summary."),
+                ]
+            ),
+            config=types.GenerateContentConfig(
+                temperature=configuration.video_temperature,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                response_mime_type="application/json",
+                response_schema=VideoResult,
+            ),
+        )
 
-    video_response = client.models.generate_content(
-        model=configuration.video_model,
-        contents=types.Content(
-            parts=[
-                types.Part(file_data=types.FileData(file_uri=video_url)),
-                types.Part(text=f"As you watch the video, create a detailed note of the video as if an article, and give a summary."),
-            ]
-        ),
-        config=types.GenerateContentConfig(
-            temperature=configuration.video_temperature,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-            response_mime_type="application/json",
-            response_schema=VideoResult,
-        ),
-    )
+        video_result: VideoResult = video_response.parsed
+        video_result.video_url = video_url
+        video_result.video_title = YouTube(video_url).title
 
-    video_result: VideoResult = video_response.parsed
-    video_result.video_url = video_url
-    video_result.video_title = YouTube(video_url).title
-
-    return video_result
+        return video_result
+    except Exception as e:
+        print(f"Error analyzing video '{video_url}': {e}")
+        return None
 
 
 def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
@@ -130,9 +135,9 @@ def analyze_video_node(state: GraphState, config: RunnableConfig) -> dict:
 
     with ThreadPoolExecutor(max_workers=min(os.cpu_count(), len(video_urls))) as executor:
         video_tasks = [executor.submit(_analyze_video, video_url, configuration) for video_url in video_urls]
-        video_results = list(tqdm([task.result() for task in video_tasks], total=len(video_tasks), desc="Analyzing videos"))
+        video_results: list[VideoResult] = [result for task in tqdm(video_tasks, total=len(video_tasks), desc="Analyzing videos") if (result := task.result()) is not None]
 
-    return {"video_results": VideoResults(video_results=video_results)}
+    return {"video_results": video_results}
 
 
 def create_report_node(state: GraphState, config: RunnableConfig) -> dict:

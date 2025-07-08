@@ -40,8 +40,8 @@ def create_report_prompt(state: GraphState) -> str:
 It consists of the following sections:
 
 """
-    if state.section_results and state.section_results.section_results:
-        for section in state.section_results.section_results:
+    if state.section_results and state.section_results:
+        for section in state.section_results:
             report_prompt += f"""SECTION {section.section.index}: {section.section.title}
 
 DESCRIPTION:
@@ -59,8 +59,8 @@ There are additional resources from videos (not necessarily relevant):
 
 """
 
-    if state.video_results and state.video_results.video_results:
-        for video in state.video_results.video_results:
+    if state.video_results and state.video_results:
+        for video in state.video_results:
             report_prompt += f"""VIDEO: {video.video_title}
 
 DETAILED NOTE:
